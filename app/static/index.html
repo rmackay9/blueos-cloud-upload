@@ -1,0 +1,660 @@
+<!--
+    BlueOS Cloud Upload Extension HTML file
+
+    The page includes these elements:
+    - Cloud service provider dropdown
+    - Username and password to access the provider
+    - Save Settings button to save the selected provider, username, password and list of directories
+    - Ping button to check if the provider is reachable
+    - List of directories to upload
+    - Upload button to upload all files in all directories to the provider
+    - Progress text area to display the status of the latest action
+
+    Each button calls function executed by the main.py python backend
+-->
+
+<html>
+    <head>
+        <title>Cloud Upload</title>
+        <link rel="icon" href="/favicon.ico" type="image/x-icon">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #0088CC; /* BlueOS blue background */
+                color: white; /* White text for better contrast on blue */
+            }
+            h1 {
+                margin-bottom: 20px;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            .card {
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                background-color: white; /* White card on blue background */
+                color: #333; /* Dark text for contrast on white card */
+            }
+            .card-body {
+                padding: 15px;
+            }
+            .row {
+                display: flex;
+                margin-bottom: 10px;
+            }
+            .col-form-label {
+                flex: 0 0 30%;
+            }
+            .col-sm-9 {
+                flex: 0 0 70%;
+            }
+            .form-control, .form-select {
+                width: 100%;
+                padding: 8px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                box-sizing: border-box;
+            }
+            .btn {
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+                border: none;
+                margin-right: 5px;
+            }
+            .btn-primary {
+                background-color: #0088CC; /* Use BlueOS blue for primary buttons */
+                color: white;
+            }
+            .btn-success {
+                background-color: #28a745;
+                color: white;
+            }
+            .btn-secondary {
+                background-color: #6c757d;
+                color: white;
+            }
+            textarea {
+                width: 100%;
+                font-family: monospace;
+                resize: vertical; /* Allow vertical resizing only, prevent horizontal resizing */
+                max-width: 100%; /* Ensure textarea doesn't exceed its container */
+                box-sizing: border-box; /* Include padding and border in the element's width */
+            }
+            .mb-3 {
+                margin-bottom: 15px;
+            }
+            .badge {
+                display: inline-block;
+                padding: 0.4em 0.7em;
+                font-size: 0.9em;
+                font-weight: 700;
+                border-radius: 0.25rem;
+                margin-right: 10px;
+            }
+            .badge-info {
+                color: #fff;
+                background-color: #17a2b8;
+            }
+            .file-counts {
+                display: flex;
+                align-items: center;
+            }
+            .btn-sm {
+                padding: 4px 8px;
+                font-size: 0.875rem;
+            }
+            .btn-outline-secondary {
+                color: #6c757d;
+                border: 1px solid #6c757d;
+                background-color: transparent;
+            }
+            .btn-outline-secondary:hover {
+                color: #fff;
+                background-color: #6c757d;
+            }
+            .btn-outline-danger {
+                color: #dc3545;
+                border: 1px solid #dc3545;
+                background-color: transparent;
+            }
+            .btn-outline-danger:hover {
+                color: #fff;
+                background-color: #dc3545;
+            }
+            .input-group {
+                display: flex;
+                align-items: center;
+                position: relative;
+            }
+            .input-group .form-control {
+                padding-right: 40px;
+            }
+            .password-toggle {
+                position: absolute;
+                right: 10px;
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+                padding: 0;
+                z-index: 10;
+            }
+            .password-toggle:hover {
+                color: #495057;
+            }
+            .form-text {
+                margin-top: 5px;
+                font-size: 0.875rem;
+            }
+            .text-muted {
+                color: #6c757d !important;
+            }
+            .text-muted a {
+                color: #0088CC;
+                text-decoration: none;
+            }
+            .text-muted a:hover {
+                text-decoration: underline;
+            }
+        </style>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+              integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ=="
+              crossorigin="anonymous" referrerpolicy="no-referrer" />
+    </head>
+    <body>
+        <div class="container">
+            <h1>Cloud Upload</h1>
+            <div class="card">
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <!-- Cloud Service Provider dropdown -->
+                        <label for="cloudProvider" class="col-form-label">Cloud Provider:</label>
+                        <div class="col-sm-9">
+                            <select class="form-select" id="cloudProvider">
+                                <option value="google">Google Cloud Storage</option>
+                                <option value="aws">Amazon S3</option>
+                                <option value="azure">Azure Blob Storage</option>
+                                <option value="dropbox">Dropbox</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Username input -->
+                        <label for="username" class="col-form-label">Username/Email:</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="username" placeholder="Enter username or email (optional for Dropbox)">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Password input -->
+                        <label for="password" class="col-form-label">Password/API Key:</label>
+                        <div class="col-sm-9">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" placeholder="Enter password, API key, or Dropbox access token">
+                                <button type="button" class="password-toggle" id="passwordToggle">
+                                    <i class="fas fa-eye" id="passwordIcon"></i>
+                                </button>
+                            </div>
+                            <small class="form-text text-muted" id="passwordHelp">
+                                For Dropbox: Get your access token from <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>
+                            </small>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Ping button -->
+                        <div class="col-sm-9" style="margin-left: auto;">
+                            <button id="pingBtn" class="btn btn-primary">Ping Provider</button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Directory List -->
+                        <label for="directoryList" class="col-form-label">Directories to Upload:</label>
+                        <div class="col-sm-9">
+                            <div id="directoryContainer">
+                                <div class="directory-item mb-2">
+                                    <div style="display: flex; align-items: center;">
+                                        <input type="text" class="form-control directory-path" placeholder="/app/logs" style="flex: 1; margin-right: 10px;">
+                                        <button class="btn btn-sm btn-outline-danger remove-directory">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="addDirectoryBtn" class="btn btn-sm btn-outline-secondary">
+                                <i class="fas fa-plus"></i> Add Directory
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Scan Local Directories and File Counts -->
+                        <div class="col-sm-9" style="margin-left: auto;">
+                            <div class="file-counts" style="display: inline-flex; align-items: center;">
+                                <button id="scanDirectoriesBtn" class="btn btn-sm btn-primary" style="margin-right: 10px;">
+                                    <i class="fas fa-search"></i> Scan Local Directories
+                                </button>
+                                <span id="totalFiles" class="badge badge-info" style="margin-right: 5px;">0 Files</span>
+                                <span id="totalSize" class="badge badge-info">0 MB</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Save Settings button -->
+                        <div class="col-sm-9" style="margin-left: auto;">
+                            <button id="saveSettingsBtn" class="btn btn-secondary">Save Settings</button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Upload button -->
+                        <div class="col-sm-9" style="margin-left: auto;">
+                            <button id="uploadBtn" class="btn btn-success">
+                                <i class="fas fa-cloud-upload-alt"></i> Upload All Files
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Progress text area -->
+                        <label for="progressLog" class="col-form-label">Progress:</label>
+                        <div class="col-sm-9">
+                            <textarea id="progressLog" class="form-control" rows="10" readonly></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Cloud Upload management logic
+            document.addEventListener('DOMContentLoaded', function() {
+
+                // get document elements
+                const cloudProviderSelect = document.getElementById('cloudProvider');
+                const usernameInput = document.getElementById('username');
+                const passwordInput = document.getElementById('password');
+                const progressLog = document.getElementById('progressLog');
+                const totalFilesElement = document.getElementById('totalFiles');
+                const totalSizeElement = document.getElementById('totalSize');
+
+                // Save settings button event listener
+                const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+                saveSettingsBtn.addEventListener('click', saveSettings);
+
+                // Ping provider button event listener
+                const pingBtn = document.getElementById('pingBtn');
+                pingBtn.addEventListener('click', pingProvider);
+
+                // Upload button event listener
+                const uploadBtn = document.getElementById('uploadBtn');
+                uploadBtn.addEventListener('click', uploadFiles);
+
+                // Scan directories button event listener
+                const scanDirectoriesBtn = document.getElementById('scanDirectoriesBtn');
+                scanDirectoriesBtn.addEventListener('click', scanDirectories);
+
+                // Add directory button event listener
+                const addDirectoryBtn = document.getElementById('addDirectoryBtn');
+                addDirectoryBtn.addEventListener('click', addDirectory);
+
+                // Password toggle button event listener
+                const passwordToggle = document.getElementById('passwordToggle');
+                passwordToggle.addEventListener('click', togglePasswordVisibility);
+
+                // Cloud provider change event listener
+                cloudProviderSelect.addEventListener('change', updateProviderHelp);
+
+                // Directory management
+                document.addEventListener('click', function(e) {
+                    if (e.target.classList.contains('remove-directory') ||
+                        e.target.parentElement.classList.contains('remove-directory')) {
+                        removeDirectory(e.target.closest('.directory-item'));
+                    }
+                });
+
+                // Load saved settings on page load
+                loadSavedSettings();
+
+                // Save settings function
+                function saveSettings() {
+                    const provider = cloudProviderSelect.value;
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+                    const directories = getDirectoryList();
+
+                    const settings = {
+                        provider: provider,
+                        username: username,
+                        password: password,
+                        directories: directories
+                    };
+
+                    fetch('/cloud/save-settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(settings)
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                progressLog.value = "Settings saved successfully\n";
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            } else {
+                                progressLog.value = "Failed to save settings: " + (data.message || '') + "\n";
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            }
+                        })
+                        .catch(error => {
+                            progressLog.value = "Error saving settings: " + error + "\n";
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                            console.error('Error:', error);
+                        });
+                }
+
+                // Load saved settings
+                function loadSavedSettings() {
+                    fetch('/cloud/get-settings', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.settings) {
+                                if (data.settings.provider) {
+                                    cloudProviderSelect.value = data.settings.provider;
+                                }
+                                if (data.settings.username) {
+                                    usernameInput.value = data.settings.username;
+                                }
+                                if (data.settings.password) {
+                                    passwordInput.value = data.settings.password;
+                                }
+                                if (data.settings.directories) {
+                                    loadDirectoryList(data.settings.directories);
+                                }
+                                // Update provider help text after loading settings
+                                updateProviderHelp();
+                                console.log('Settings loaded successfully');
+                            } else {
+                                console.log('No saved settings found or failed to load');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error loading settings:', error);
+                        });
+                }
+
+                // Ping provider
+                function pingProvider() {
+                    const provider = cloudProviderSelect.value;
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+
+                    progressLog.value = 'Pinging cloud provider...\n';
+                    progressLog.scrollTop = progressLog.scrollHeight;
+
+                    fetch('/cloud/ping', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            provider: provider,
+                            username: username,
+                            password: password
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            progressLog.value += data.message + '\n';
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        })
+                        .catch(error => {
+                            progressLog.value += `Error: ${error}\n`;
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        });
+                }
+
+                // Upload files
+                function uploadFiles() {
+                    const provider = cloudProviderSelect.value;
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+                    const directories = getDirectoryList();
+
+                    if (directories.length === 0) {
+                        progressLog.value = "Please add at least one directory to upload\n";
+                        progressLog.scrollTop = progressLog.scrollHeight;
+                        return;
+                    }
+
+                    const uploadData = {
+                        provider: provider,
+                        username: username,
+                        password: password,
+                        directories: directories
+                    };
+
+                    fetch('/cloud/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(uploadData)
+                    })
+                        .then(response => {
+                            if (!response.ok) {
+                                throw new Error(`Server responded with status: ${response.status}`);
+                            }
+
+                            // Handle streaming response
+                            const reader = response.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+
+                            function processStream() {
+                                reader.read().then(({ done, value }) => {
+                                    if (done) {
+                                        // end of stream, backend will have sent a final message
+                                        return;
+                                    }
+
+                                    // Decode and add to buffer
+                                    buffer += decoder.decode(value, { stream: true });
+
+                                    // Process complete SSE messages
+                                    const lines = buffer.split('\n');
+                                    buffer = lines.pop(); // Keep incomplete line in buffer
+
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ')) {
+                                            // Extract message content after "data: "
+                                            const message = line.substring(6);
+                                            if (message.trim()) {
+                                                progressLog.value += message + '\n';
+                                                progressLog.scrollTop = progressLog.scrollHeight;
+                                            }
+                                        }
+                                        // Ignore heartbeat lines (empty or just ":")
+                                    }
+
+                                    processStream();
+                                }).catch(error => {
+                                    progressLog.value += `Error reading stream: ${error}\n`;
+                                    progressLog.scrollTop = progressLog.scrollHeight;
+                                });
+                            }
+
+                            processStream();
+                        })
+                        .catch(error => {
+                            progressLog.value += `Error initiating upload: ${error}\n`;
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        });
+                }
+
+                // Scan directories for files
+                function scanDirectories() {
+                    const directories = getDirectoryList();
+
+                    if (directories.length === 0) {
+                        progressLog.value = "Please add at least one directory to scan\n";
+                        progressLog.scrollTop = progressLog.scrollHeight;
+                        return;
+                    }
+
+                    // Add spin animation to scan button
+                    const scanIcon = scanDirectoriesBtn.querySelector('i');
+                    scanIcon.classList.add('fa-spin');
+
+                    fetch('/cloud/scan-directories', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ directories: directories })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                totalFilesElement.textContent = `${data.total_files} Files`;
+                                totalSizeElement.textContent = `${data.total_size} MB`;
+                                progressLog.value = `Scan completed: ${data.total_files} files (${data.total_size} MB)\n`;
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            } else {
+                                progressLog.value = 'Failed to scan directories: ' + (data.message || '') + '\n';
+                                progressLog.scrollTop = progressLog.scrollHeight;
+                            }
+                        })
+                        .catch(error => {
+                            progressLog.value = 'Error scanning directories: ' + error + '\n';
+                            progressLog.scrollTop = progressLog.scrollHeight;
+                        })
+                        .finally(() => {
+                            // Remove spin animation
+                            setTimeout(() => {
+                                scanIcon.classList.remove('fa-spin');
+                            }, 500);
+                        });
+                }
+
+                // Directory management functions
+                function addDirectory() {
+                    const container = document.getElementById('directoryContainer');
+                    const newItem = document.createElement('div');
+                    newItem.className = 'directory-item mb-2';
+                    newItem.innerHTML = `
+                        <div style="display: flex; align-items: center;">
+                            <input type="text" class="form-control directory-path" placeholder="/home/pi/logs" style="flex: 1; margin-right: 10px;">
+                            <button class="btn btn-sm btn-outline-danger remove-directory">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(newItem);
+                }
+
+                function removeDirectory(item) {
+                    const container = document.getElementById('directoryContainer');
+                    if (container.children.length > 1) {
+                        // If there are multiple directories, remove this one
+                        item.remove();
+                    } else {
+                        // If this is the only directory, just clear its content
+                        const input = item.querySelector('.directory-path');
+                        if (input) {
+                            input.value = '';
+                        }
+                    }
+                }
+
+                function getDirectoryList() {
+                    const paths = [];
+                    document.querySelectorAll('.directory-path').forEach(input => {
+                        if (input.value.trim()) {
+                            paths.push(input.value.trim());
+                        }
+                    });
+                    return paths;
+                }
+
+                function loadDirectoryList(directories) {
+                    const container = document.getElementById('directoryContainer');
+                    container.innerHTML = '';
+
+                    if (directories.length === 0) {
+                        addDirectory();
+                    } else {
+                        directories.forEach(dir => {
+                            const newItem = document.createElement('div');
+                            newItem.className = 'directory-item mb-2';
+                            newItem.innerHTML = `
+                                <div style="display: flex; align-items: center;">
+                                    <input type="text" class="form-control directory-path" value="${dir}" style="flex: 1; margin-right: 10px;">
+                                    <button class="btn btn-sm btn-outline-danger remove-directory">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            `;
+                            container.appendChild(newItem);
+                        });
+                    }
+                }
+
+                // Password visibility toggle function
+                function togglePasswordVisibility() {
+                    const passwordInput = document.getElementById('password');
+                    const passwordIcon = document.getElementById('passwordIcon');
+
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        passwordIcon.classList.remove('fa-eye');
+                        passwordIcon.classList.add('fa-eye-slash');
+                    } else {
+                        passwordInput.type = 'password';
+                        passwordIcon.classList.remove('fa-eye-slash');
+                        passwordIcon.classList.add('fa-eye');
+                    }
+                }
+
+                // Update provider-specific help text and placeholders
+                function updateProviderHelp() {
+                    const provider = cloudProviderSelect.value;
+                    const usernameInput = document.getElementById('username');
+                    const passwordInput = document.getElementById('password');
+                    const passwordHelp = document.getElementById('passwordHelp');
+
+                    switch (provider) {
+                        case 'dropbox':
+                            usernameInput.placeholder = 'Email (optional)';
+                            passwordInput.placeholder = 'Dropbox access token';
+                            passwordHelp.innerHTML = 'Get your access token from <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>';
+                            break;
+                        case 'google':
+                            usernameInput.placeholder = 'Service account email';
+                            passwordInput.placeholder = 'API key or service account key';
+                            passwordHelp.innerHTML = 'Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>';
+                            break;
+                        case 'aws':
+                            usernameInput.placeholder = 'Access key ID';
+                            passwordInput.placeholder = 'Secret access key';
+                            passwordHelp.innerHTML = 'Get your credentials from <a href="https://console.aws.amazon.com/iam/home#/security_credentials" target="_blank">AWS Console</a>';
+                            break;
+                        case 'azure':
+                            usernameInput.placeholder = 'Storage account name';
+                            passwordInput.placeholder = 'Access key';
+                            passwordHelp.innerHTML = 'Get your access key from <a href="https://portal.azure.com/" target="_blank">Azure Portal</a>';
+                            break;
+                        default:
+                            usernameInput.placeholder = 'Enter username or email';
+                            passwordInput.placeholder = 'Enter password or API key';
+                            passwordHelp.innerHTML = '';
+                    }
+                }
+
+                // Initialize provider help on page load
+                updateProviderHelp();
+            });
+        </script>
+    </body>
+</html>
