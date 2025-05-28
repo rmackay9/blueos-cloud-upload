@@ -1,0 +1,10 @@
+{
+    "name": "Cloud Upload",
+    "description": "BlueOS Extension to upload logs, images and videos to a cloud provide (e.g. Google Cloud)",
+    "icon": "mdi-file-upload",
+    "company": "ArduPilot",
+    "version": "0.0.1",
+    "new_page": false,
+    "webpage": "https://github.com/rmackay9/blueos-cloud-upload",
+    "api": ""
+}
