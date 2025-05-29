@@ -58,8 +58,8 @@ To test on an Ubuntu PC
 
 - Ensure the PC and camera is on the same ethernet subnet
 - Open docker desktop (required only on Windows WSL2 machines)
-- docker build -t YOURDOCKERHUBUSER/YOURDOCKERHUBREPO:latest .
-- docker run -p 8000:8000 YOURDOCKERHUBUSER/YOURDOCKERHUBREPO:latest
+- docker build -t YOURDOCKERHUBUSER/blueos-cloud-upload:latest .
+- docker run -p 8000:8000 YOURDOCKERHUBUSER/blueos-cloud-upload:latest
 - On docker desktop, Containers, a new image should appear with "Port(s)" field, "8000:8000".  Click to open a browser
 - Within the web browser the Cloud Upload page should appear, set the "Cloud Provider", "username" and "password" fields
 - Select the directories to upload
