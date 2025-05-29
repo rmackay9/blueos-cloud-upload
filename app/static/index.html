@@ -134,6 +134,27 @@
                 color: #fff;
                 background-color: #0088CC;
             }
+            .input-group {
+                display: flex;
+                align-items: center;
+                position: relative;
+            }
+            .input-group .form-control {
+                padding-right: 40px;
+            }
+            .password-toggle {
+                position: absolute;
+                right: 10px;
+                background: none;
+                border: none;
+                color: #6c757d;
+                cursor: pointer;
+                padding: 0;
+                z-index: 10;
+            }
+            .password-toggle:hover {
+                color: #495057;
+            }
         </style>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
               integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ=="
@@ -167,7 +188,12 @@
                         <!-- Password input -->
                         <label for="password" class="col-form-label">Password/API Key:</label>
                         <div class="col-sm-9">
-                            <input type="password" class="form-control" id="password" placeholder="Enter password or API key">
+                            <div class="input-group">
+                                <input type="password" class="form-control" id="password" placeholder="Enter password or API key">
+                                <button type="button" class="password-toggle" id="passwordToggle">
+                                    <i class="fas fa-eye" id="passwordIcon"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -264,6 +290,10 @@
                 // Add directory button event listener
                 const addDirectoryBtn = document.getElementById('addDirectoryBtn');
                 addDirectoryBtn.addEventListener('click', addDirectory);
+
+                // Password toggle button event listener
+                const passwordToggle = document.getElementById('passwordToggle');
+                passwordToggle.addEventListener('click', togglePasswordVisibility);
 
                 // Directory management
                 document.addEventListener('click', function(e) {
@@ -544,6 +574,22 @@
                             `;
                             container.appendChild(newItem);
                         });
+                    }
+                }
+
+                // Password visibility toggle function
+                function togglePasswordVisibility() {
+                    const passwordInput = document.getElementById('password');
+                    const passwordIcon = document.getElementById('passwordIcon');
+
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        passwordIcon.classList.remove('fa-eye');
+                        passwordIcon.classList.add('fa-eye-slash');
+                    } else {
+                        passwordInput.type = 'password';
+                        passwordIcon.classList.remove('fa-eye-slash');
+                        passwordIcon.classList.add('fa-eye');
                     }
                 }
             });
