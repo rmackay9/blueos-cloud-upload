@@ -751,7 +751,6 @@ async def handle_dropbox_upload(cloud_settings: CloudSettings, scan_result: Dict
 
     try:
         # Initialize Dropbox client
-        yield f"data: Initializing Dropbox connection...\n\n"
         dbx = dropbox.Dropbox(cloud_settings.password)  # password field contains access token
 
         # Test connection
@@ -811,7 +810,6 @@ async def handle_dropbox_upload(cloud_settings: CloudSettings, scan_result: Dict
         yield f"data: Successfully uploaded: {uploaded_count} files\n\n"
         if failed_count > 0:
             yield f"data: Failed uploads: {failed_count} files\n\n"
-        yield f"data: Total processed: {uploaded_count + failed_count} of {total_files} files\n\n"
 
     except Exception as e:
         logger.exception(f"Error during Dropbox upload: {str(e)}")

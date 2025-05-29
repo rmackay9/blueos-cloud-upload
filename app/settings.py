@@ -16,7 +16,7 @@ DEFAULT_SETTINGS = {
         'provider': 'google',
         'username': '',
         'password': '',
-        'directories': ['/home/pi/videos']
+        'directories': ['/app/logs']
     }
 }
 

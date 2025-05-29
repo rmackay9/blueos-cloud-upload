@@ -125,15 +125,6 @@
                 color: #fff;
                 background-color: #dc3545;
             }
-            .btn-outline-primary {
-                color: #0088CC; /* Use BlueOS blue for outline-primary buttons */
-                border: 1px solid #0088CC;
-                background-color: transparent;
-            }
-            .btn-outline-primary:hover {
-                color: #fff;
-                background-color: #0088CC;
-            }
             .input-group {
                 display: flex;
                 align-items: center;
@@ -226,7 +217,7 @@
                             <div id="directoryContainer">
                                 <div class="directory-item mb-2">
                                     <div style="display: flex; align-items: center;">
-                                        <input type="text" class="form-control directory-path" placeholder="/home/pi/videos" style="flex: 1; margin-right: 10px;">
+                                        <input type="text" class="form-control directory-path" placeholder="/app/logs" style="flex: 1; margin-right: 10px;">
                                         <button class="btn btn-sm btn-outline-danger remove-directory">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
@@ -236,6 +227,18 @@
                             <button id="addDirectoryBtn" class="btn btn-sm btn-outline-secondary">
                                 <i class="fas fa-plus"></i> Add Directory
                             </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <!-- Scan Local Directories and File Counts -->
+                        <div class="col-sm-9" style="margin-left: auto;">
+                            <div class="file-counts" style="display: inline-flex; align-items: center;">
+                                <button id="scanDirectoriesBtn" class="btn btn-sm btn-primary" style="margin-right: 10px;">
+                                    <i class="fas fa-search"></i> Scan Local Directories
+                                </button>
+                                <span id="totalFiles" class="badge badge-info" style="margin-right: 5px;">0 Files</span>
+                                <span id="totalSize" class="badge badge-info">0 MB</span>
+                            </div>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -250,19 +253,6 @@
                             <button id="uploadBtn" class="btn btn-success">
                                 <i class="fas fa-cloud-upload-alt"></i> Upload All Files
                             </button>
-                        </div>
-                    </div>
-                    <div class="row mb-3">
-                        <!-- File Summary -->
-                        <label class="col-form-label">Upload Summary:</label>
-                        <div class="col-sm-9">
-                            <div class="file-counts">
-                                <span id="totalFiles" class="badge badge-info">0 Files</span>
-                                <span id="totalSize" class="badge badge-info">0 MB</span>
-                                <button id="scanDirectoriesBtn" class="btn btn-sm btn-outline-secondary">
-                                    <i class="fas fa-search"></i> Scan Directories
-                                </button>
-                            </div>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -382,6 +372,8 @@
                                 if (data.settings.directories) {
                                     loadDirectoryList(data.settings.directories);
                                 }
+                                // Update provider help text after loading settings
+                                updateProviderHelp();
                                 console.log('Settings loaded successfully');
                             } else {
                                 console.log('No saved settings found or failed to load');
@@ -436,9 +428,6 @@
                         return;
                     }
 
-                    progressLog.value = `Starting upload to ${provider}...\n`;
-                    progressLog.scrollTop = progressLog.scrollHeight;
-
                     const uploadData = {
                         provider: provider,
                         username: username,
@@ -466,8 +455,7 @@
                             function processStream() {
                                 reader.read().then(({ done, value }) => {
                                     if (done) {
-                                        progressLog.value += "Upload completed!\n";
-                                        progressLog.scrollTop = progressLog.scrollHeight;
+                                        // end of stream, backend will have sent a final message
                                         return;
                                     }
 
