@@ -12,17 +12,11 @@ SETTINGS_FILE = Path('/app/settings/cloud_upload_settings.json')
 
 # Default settings
 DEFAULT_SETTINGS = {
-    'cameras': {
-        'siyi': {
-            'ip': '192.168.144.25'
-        },
-        'xfrobot': {
-            'ip': '192.168.144.108'
-        }
-    },
-    'last_used': {
-        'camera_type': 'siyi',
-        'ip': '192.168.144.25'
+    'cloud': {
+        'provider': 'google',
+        'username': '',
+        'password': '',
+        'directories': ['/home/pi/videos']
     }
 }
 
@@ -76,15 +70,16 @@ def save_settings(settings):
     except Exception as e:
         logger.error(f"Error saving settings: {e}")
 
-
-# update the camera IP address in the settings file
-def update_camera_ip(camera_type, ip):
+# Cloud settings management functions
+def update_cloud_settings(provider, username, password, directories):
     """
-    Update the IP address for a specific camera type
+    Update cloud provider settings
 
     Args:
-        camera_type (str): The camera type ("siyi" or "xfrobot")
-        ip (str): The IP address
+        provider (str): Cloud provider name
+        username (str): Username/email for the provider
+        password (str): Password/API key for the provider
+        directories (list): List of directories to upload
 
     Returns:
         bool: True if successful, False otherwise
@@ -92,56 +87,61 @@ def update_camera_ip(camera_type, ip):
     try:
         settings = get_settings()
 
-        # Update camera IP
-        if camera_type not in settings['cameras']:
-            settings['cameras'][camera_type] = {}
-
-        settings['cameras'][camera_type]['ip'] = ip
-
-        # Update last used settings
-        settings['last_used'] = {
-            'camera_type': camera_type,
-            'ip': ip
+        # Update cloud settings
+        settings['cloud'] = {
+            'provider': provider,
+            'username': username,
+            'password': password,
+            'directories': directories
         }
 
         save_settings(settings)
+        logger.info(f"Cloud settings updated for provider: {provider}")
         return True
     except Exception as e:
-        logger.error(f"Error updating camera IP: {e}")
+        logger.error(f"Error updating cloud settings: {e}")
         return False
 
 
-# get the latest IP address for a specific camera type
-def get_camera_ip(camera_type):
+def get_cloud_settings():
     """
-    Get the saved IP address for a camera type
-
-    Args:
-        camera_type (str): The camera type ("siyi" or "xfrobot")
+    Get saved cloud provider settings
 
     Returns:
-        str: The saved IP address or default if not found
+        dict: Cloud settings dictionary
     """
     settings = get_settings()
-
-    # Check if camera type exists in settings
-    if camera_type in settings['cameras'] and 'ip' in settings['cameras'][camera_type]:
-        return settings['cameras'][camera_type]['ip']
-
-    # Return default IP if not found
-    if camera_type == 'siyi':
-        return DEFAULT_SETTINGS['cameras']['siyi']['ip']
-    else:
-        return DEFAULT_SETTINGS['cameras']['xfrobot']['ip']
+    return settings.get('cloud', DEFAULT_SETTINGS['cloud'])
 
 
-# get the last used camera type and IP address
-def get_last_used():
+def get_cloud_directories():
     """
-    Get the last used camera type and IP
+    Get the list of directories to upload
 
     Returns:
-        dict: Dictionary with camera_type and ip
+        list: List of directory paths
     """
-    settings = get_settings()
-    return settings.get('last_used', DEFAULT_SETTINGS['last_used'])
+    cloud_settings = get_cloud_settings()
+    return cloud_settings.get('directories', [])
+
+
+def get_cloud_provider():
+    """
+    Get the selected cloud provider
+
+    Returns:
+        str: Cloud provider name
+    """
+    cloud_settings = get_cloud_settings()
+    return cloud_settings.get('provider', 'google')
+
+
+def get_cloud_credentials():
+    """
+    Get cloud provider credentials
+
+    Returns:
+        tuple: (username, password)
+    """
+    cloud_settings = get_cloud_settings()
+    return cloud_settings.get('username', ''), cloud_settings.get('password', '')

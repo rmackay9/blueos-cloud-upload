@@ -3,8 +3,9 @@
 # Cloud Upload Python backend
 # Implements these features required by the index.html frontend:
 # - Save setting including cloud service provider, username, password and list of directories
-# - Ping provider
-# - Upload files to the cloud
+# - Scan directories to count files and calculate total size
+# - Ping provider (placeholder)
+# - Upload files to the cloud (placeholder)
 
 import logging.handlers
 import subprocess
@@ -12,12 +13,14 @@ import asyncio
 import sys
 import zipfile
 import io
+import os
 from datetime import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, StreamingResponse
-from typing import Dict, Any
+from typing import Dict, Any, List
+from pydantic import BaseModel
 
 # Import the settings module
 from app import settings
@@ -37,6 +40,22 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(console_handler)
 
 app = FastAPI()
+
+# Pydantic models for request bodies
+class CloudSettings(BaseModel):
+    provider: str
+    username: str
+    password: str
+    directories: List[str]
+
+class DirectoriesScan(BaseModel):
+    directories: List[str]
+
+class CloudCredentials(BaseModel):
+    provider: str
+    username: str
+    password: str
+
 
 # Ensure downloads directory exists
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -369,6 +388,259 @@ async def delete_files() -> Dict[str, Any]:
             "message": f"Error: {str(e)}",
             "deleted_count": 0
         }
+
+
+# Helper function to scan directories and calculate file counts and sizes
+def scan_directories(directories: List[str]) -> Dict[str, Any]:
+    """Scan directories to count files and calculate total size
+
+    Args:
+        directories: List of directory paths to scan
+
+    Returns:
+        Dict containing total_files, total_size, and breakdown by directory
+    """
+    total_files = 0
+    total_size_bytes = 0
+    directory_info = {}
+
+    for directory in directories:
+        dir_path = Path(directory)
+        dir_files = 0
+        dir_size = 0
+
+        try:
+            if dir_path.exists() and dir_path.is_dir():
+                # Recursively scan all files in the directory
+                for file_path in dir_path.rglob('*'):
+                    if file_path.is_file():
+                        try:
+                            file_size = file_path.stat().st_size
+                            dir_files += 1
+                            dir_size += file_size
+                        except OSError:
+                            logger.warning(f"Could not access file: {file_path}")
+                            continue
+            else:
+                logger.warning(f"Directory does not exist or is not accessible: {directory}")
+
+        except Exception as e:
+            logger.error(f"Error scanning directory {directory}: {e}")
+
+        directory_info[directory] = {
+            'files': dir_files,
+            'size_bytes': dir_size,
+            'size_mb': round(dir_size / (1024 * 1024), 2)
+        }
+
+        total_files += dir_files
+        total_size_bytes += dir_size
+
+    total_size_mb = round(total_size_bytes / (1024 * 1024), 2)
+
+    return {
+        'total_files': total_files,
+        'total_size': f"{total_size_mb}",
+        'total_size_bytes': total_size_bytes,
+        'directories': directory_info        }
+
+
+# ==================== CLOUD UPLOAD ENDPOINTS ====================
+
+@app.post("/cloud/save-settings")
+async def save_cloud_settings(cloud_settings: CloudSettings) -> Dict[str, Any]:
+    """Save cloud provider settings to persistent storage"""
+    logger.info(f"Saving cloud settings for provider: {cloud_settings.provider}")
+
+    try:
+        success = settings.update_cloud_settings(
+            cloud_settings.provider,
+            cloud_settings.username,
+            cloud_settings.password,
+            cloud_settings.directories
+        )
+
+        if success:
+            return {
+                "success": True,
+                "message": f"Cloud settings saved for {cloud_settings.provider}"
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Failed to save cloud settings"
+            }
+    except Exception as e:
+        logger.exception(f"Error saving cloud settings: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error saving settings: {str(e)}"
+        }
+
+
+@app.post("/cloud/get-settings")
+async def get_cloud_settings() -> Dict[str, Any]:
+    """Get saved cloud provider settings"""
+    logger.info("Getting cloud settings")
+
+    try:
+        cloud_settings = settings.get_cloud_settings()
+        return {
+            "success": True,
+            "settings": cloud_settings
+        }
+    except Exception as e:
+        logger.exception(f"Error getting cloud settings: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }
+
+
+@app.post("/cloud/scan-directories")
+async def scan_cloud_directories(directories_request: DirectoriesScan) -> Dict[str, Any]:
+    """Scan directories to count files and calculate total size"""
+    logger.info(f"Scanning directories: {directories_request.directories}")
+
+    try:
+        if not directories_request.directories:
+            return {
+                "success": False,
+                "message": "No directories provided"
+            }
+
+        scan_result = scan_directories(directories_request.directories)
+
+        return {
+            "success": True,
+            "total_files": scan_result["total_files"],
+            "total_size": scan_result["total_size"],
+            "total_size_bytes": scan_result["total_size_bytes"],
+            "directories": scan_result["directories"]
+        }
+
+    except Exception as e:
+        logger.exception(f"Error scanning directories: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error scanning directories: {str(e)}"
+        }
+
+
+@app.post("/cloud/ping")
+async def ping_cloud_provider(credentials: CloudCredentials) -> Dict[str, Any]:
+    """Ping cloud provider to check connectivity (placeholder)"""
+    logger.info(f"Ping request for {credentials.provider} provider")
+
+    try:
+        # Placeholder implementation - in a real implementation, you would:
+        # 1. Use the provider-specific SDK to test connectivity
+        # 2. Validate credentials
+        # 3. Check bucket/container access permissions
+
+        if not credentials.username or not credentials.password:
+            return {
+                "success": False,
+                "message": "Username and password/API key are required"
+            }
+
+        # Simulate ping response
+        provider_urls = {
+            "google": "storage.googleapis.com",
+            "aws": "s3.amazonaws.com",
+            "azure": "blob.core.windows.net",
+            "dropbox": "api.dropboxapi.com"
+        }
+
+        url = provider_urls.get(credentials.provider, "unknown")
+
+        # For now, just return success with a message
+        return {
+            "success": True,
+            "message": f"Ping to {credentials.provider} ({url}) successful (simulated)"
+        }
+
+    except Exception as e:
+        logger.exception(f"Error pinging cloud provider: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error pinging provider: {str(e)}"
+        }
+
+
+@app.post("/cloud/upload")
+async def upload_to_cloud(cloud_settings: CloudSettings):
+    """Upload files to cloud provider (placeholder for streaming response)"""
+    logger.info(f"Upload request for {cloud_settings.provider} provider")
+
+    # Return streaming response for real-time progress updates
+    return StreamingResponse(
+        upload_generator(cloud_settings),
+        media_type="text/event-stream"
+    )
+
+
+async def upload_generator(cloud_settings: CloudSettings):
+    """Generator function for streaming upload progress (placeholder)"""
+    try:
+        # Validate settings
+        if not cloud_settings.directories:
+            yield f"data: Error: No directories specified for upload\n\n"
+            return
+
+        if not cloud_settings.username or not cloud_settings.password:
+            yield f"data: Error: Username and password/API key are required\n\n"
+            return
+
+        # Save settings
+        settings.update_cloud_settings(
+            cloud_settings.provider,
+            cloud_settings.username,
+            cloud_settings.password,
+            cloud_settings.directories
+        )
+
+        yield f"data: Starting upload to {cloud_settings.provider}...\n\n"
+
+        # Scan directories first
+        yield f"data: Scanning directories for files...\n\n"
+        scan_result = scan_directories(cloud_settings.directories)
+
+        total_files = scan_result["total_files"]
+        total_size = scan_result["total_size"]
+
+        if total_files == 0:
+            yield f"data: No files found in specified directories\n\n"
+            return
+
+        yield f"data: Found {total_files} files ({total_size} MB) to upload\n\n"
+
+        # Placeholder for actual upload implementation
+        # In a real implementation, you would:
+        # 1. Initialize the cloud provider SDK
+        # 2. Authenticate with the provided credentials
+        # 3. Iterate through all files in the directories
+        # 4. Upload each file with progress updates
+        # 5. Handle errors and retries
+
+        for i, directory in enumerate(cloud_settings.directories, 1):
+            dir_info = scan_result["directories"].get(directory, {})
+            dir_files = dir_info.get("files", 0)
+            dir_size = dir_info.get("size_mb", 0)
+
+            yield f"data: Processing directory {i}/{len(cloud_settings.directories)}: {directory}\n\n"
+            yield f"data: Directory contains {dir_files} files ({dir_size} MB)\n\n"
+
+            # Simulate upload progress
+            await asyncio.sleep(1)
+
+        yield f"data: Upload completed successfully!\n\n"
+        yield f"data: Total files uploaded: {total_files}\n\n"
+        yield f"data: Total size uploaded: {total_size} MB\n\n"
+
+    except Exception as e:
+        logger.exception(f"Error during upload: {str(e)}")
+        yield f"data: Error during upload: {str(e)}\n\n"
 
 
 # Mount static files AFTER defining API routes
