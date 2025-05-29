@@ -155,6 +155,20 @@
             .password-toggle:hover {
                 color: #495057;
             }
+            .form-text {
+                margin-top: 5px;
+                font-size: 0.875rem;
+            }
+            .text-muted {
+                color: #6c757d !important;
+            }
+            .text-muted a {
+                color: #0088CC;
+                text-decoration: none;
+            }
+            .text-muted a:hover {
+                text-decoration: underline;
+            }
         </style>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
               integrity="sha512-1ycn6IcaQQ40/MKBW2W4Rhis/DbILU74C1vSrLJxCq57o941Ym01SwNsOMqvEBFlcgUa6xLiPY/NS5R+E6ztJQ=="
@@ -181,7 +195,7 @@
                         <!-- Username input -->
                         <label for="username" class="col-form-label">Username/Email:</label>
                         <div class="col-sm-9">
-                            <input type="text" class="form-control" id="username" placeholder="Enter username or email">
+                            <input type="text" class="form-control" id="username" placeholder="Enter username or email (optional for Dropbox)">
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -189,11 +203,14 @@
                         <label for="password" class="col-form-label">Password/API Key:</label>
                         <div class="col-sm-9">
                             <div class="input-group">
-                                <input type="password" class="form-control" id="password" placeholder="Enter password or API key">
+                                <input type="password" class="form-control" id="password" placeholder="Enter password, API key, or Dropbox access token">
                                 <button type="button" class="password-toggle" id="passwordToggle">
                                     <i class="fas fa-eye" id="passwordIcon"></i>
                                 </button>
                             </div>
+                            <small class="form-text text-muted" id="passwordHelp">
+                                For Dropbox: Get your access token from <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>
+                            </small>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -294,6 +311,9 @@
                 // Password toggle button event listener
                 const passwordToggle = document.getElementById('passwordToggle');
                 passwordToggle.addEventListener('click', togglePasswordVisibility);
+
+                // Cloud provider change event listener
+                cloudProviderSelect.addEventListener('change', updateProviderHelp);
 
                 // Directory management
                 document.addEventListener('click', function(e) {
@@ -441,6 +461,7 @@
                             // Handle streaming response
                             const reader = response.body.getReader();
                             const decoder = new TextDecoder();
+                            let buffer = '';
 
                             function processStream() {
                                 reader.read().then(({ done, value }) => {
@@ -450,9 +471,24 @@
                                         return;
                                     }
 
-                                    const chunk = decoder.decode(value, { stream: true });
-                                    progressLog.value += chunk;
-                                    progressLog.scrollTop = progressLog.scrollHeight;
+                                    // Decode and add to buffer
+                                    buffer += decoder.decode(value, { stream: true });
+
+                                    // Process complete SSE messages
+                                    const lines = buffer.split('\n');
+                                    buffer = lines.pop(); // Keep incomplete line in buffer
+
+                                    for (const line of lines) {
+                                        if (line.startsWith('data: ')) {
+                                            // Extract message content after "data: "
+                                            const message = line.substring(6);
+                                            if (message.trim()) {
+                                                progressLog.value += message + '\n';
+                                                progressLog.scrollTop = progressLog.scrollHeight;
+                                            }
+                                        }
+                                        // Ignore heartbeat lines (empty or just ":")
+                                    }
 
                                     processStream();
                                 }).catch(error => {
@@ -592,6 +628,44 @@
                         passwordIcon.classList.add('fa-eye');
                     }
                 }
+
+                // Update provider-specific help text and placeholders
+                function updateProviderHelp() {
+                    const provider = cloudProviderSelect.value;
+                    const usernameInput = document.getElementById('username');
+                    const passwordInput = document.getElementById('password');
+                    const passwordHelp = document.getElementById('passwordHelp');
+
+                    switch (provider) {
+                        case 'dropbox':
+                            usernameInput.placeholder = 'Email (optional)';
+                            passwordInput.placeholder = 'Dropbox access token';
+                            passwordHelp.innerHTML = 'Get your access token from <a href="https://www.dropbox.com/developers/apps" target="_blank">Dropbox App Console</a>';
+                            break;
+                        case 'google':
+                            usernameInput.placeholder = 'Service account email';
+                            passwordInput.placeholder = 'API key or service account key';
+                            passwordHelp.innerHTML = 'Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a>';
+                            break;
+                        case 'aws':
+                            usernameInput.placeholder = 'Access key ID';
+                            passwordInput.placeholder = 'Secret access key';
+                            passwordHelp.innerHTML = 'Get your credentials from <a href="https://console.aws.amazon.com/iam/home#/security_credentials" target="_blank">AWS Console</a>';
+                            break;
+                        case 'azure':
+                            usernameInput.placeholder = 'Storage account name';
+                            passwordInput.placeholder = 'Access key';
+                            passwordHelp.innerHTML = 'Get your access key from <a href="https://portal.azure.com/" target="_blank">Azure Portal</a>';
+                            break;
+                        default:
+                            usernameInput.placeholder = 'Enter username or email';
+                            passwordInput.placeholder = 'Enter password or API key';
+                            passwordHelp.innerHTML = '';
+                    }
+                }
+
+                // Initialize provider help on page load
+                updateProviderHelp();
             });
         </script>
     </body>

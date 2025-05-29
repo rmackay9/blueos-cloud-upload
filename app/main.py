@@ -22,6 +22,17 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Dict, Any, List
 from pydantic import BaseModel
 
+# Import cloud provider libraries
+try:
+    import dropbox
+    from dropbox.exceptions import AuthError, ApiError
+    DROPBOX_AVAILABLE = True
+except ImportError:
+    dropbox = None
+    DROPBOX_AVAILABLE = False
+import dropbox
+from dropbox.exceptions import AuthError, ApiError
+
 # Import the settings module
 from app import settings
 
@@ -445,6 +456,107 @@ def scan_directories(directories: List[str]) -> Dict[str, Any]:
         'directories': directory_info        }
 
 
+# ==================== CLOUD PROVIDER HELPER FUNCTIONS ====================
+
+def test_dropbox_connection(access_token: str) -> tuple[bool, str]:
+    """Test Dropbox connection with the provided access token
+
+    Args:
+        access_token: Dropbox access token
+
+    Returns:
+        Tuple of (success, message)
+    """
+    if not DROPBOX_AVAILABLE:
+        return False, "Dropbox library not available"
+
+    try:
+        dbx = dropbox.Dropbox(access_token)
+        # Try to get account info to test the connection
+        account_info = dbx.users_get_current_account()
+        return True, f"Connected to Dropbox account: {account_info.email}"
+    except AuthError:
+        return False, "Invalid Dropbox access token"
+    except Exception as e:
+        return False, f"Error connecting to Dropbox: {str(e)}"
+
+
+async def upload_file_to_dropbox(dbx, local_file_path: Path, remote_path: str) -> tuple[bool, str]:
+    """Upload a single file to Dropbox
+
+    Args:
+        dbx: Dropbox client instance
+        local_file_path: Path to the local file
+        remote_path: Destination path in Dropbox
+
+    Returns:
+        Tuple of (success, message)
+    """
+    try:
+        file_size = local_file_path.stat().st_size
+
+        # For files larger than 150MB, use upload session (chunked upload)
+        if file_size > 150 * 1024 * 1024:
+            return await upload_large_file_to_dropbox(dbx, local_file_path, remote_path)
+
+        # For smaller files, use regular upload
+        with open(local_file_path, 'rb') as f:
+            file_data = f.read()
+
+        dbx.files_upload(
+            file_data,
+            remote_path,
+            mode=dropbox.files.WriteMode.overwrite
+        )
+
+        return True, f"Uploaded {local_file_path.name} ({file_size} bytes)"
+
+    except Exception as e:
+        return False, f"Failed to upload {local_file_path.name}: {str(e)}"
+
+
+async def upload_large_file_to_dropbox(dbx, local_file_path: Path, remote_path: str) -> tuple[bool, str]:
+    """Upload a large file to Dropbox using chunked upload
+
+    Args:
+        dbx: Dropbox client instance
+        local_file_path: Path to the local file
+        remote_path: Destination path in Dropbox
+
+    Returns:
+        Tuple of (success, message)
+    """
+    try:
+        file_size = local_file_path.stat().st_size
+        chunk_size = 4 * 1024 * 1024  # 4MB chunks
+
+        with open(local_file_path, 'rb') as f:
+            # Start upload session
+            upload_session_start_result = dbx.files_upload_session_start(
+                f.read(chunk_size)
+            )
+            cursor = dropbox.files.UploadSessionCursor(
+                session_id=upload_session_start_result.session_id,
+                offset=f.tell(),
+            )
+
+            # Upload remaining chunks
+            while f.tell() < file_size:
+                if (file_size - f.tell()) <= chunk_size:
+                    # Final chunk
+                    commit = dropbox.files.CommitInfo(path=remote_path, mode=dropbox.files.WriteMode.overwrite)
+                    dbx.files_upload_session_finish(f.read(chunk_size), cursor, commit)
+                else:
+                    # Regular chunk
+                    dbx.files_upload_session_append_v2(f.read(chunk_size), cursor)
+                    cursor.offset = f.tell()
+
+        return True, f"Uploaded large file {local_file_path.name} ({file_size} bytes)"
+
+    except Exception as e:
+        return False, f"Failed to upload large file {local_file_path.name}: {str(e)}"
+
+
 # ==================== CLOUD UPLOAD ENDPOINTS ====================
 
 @app.post("/cloud/save-settings")
@@ -529,36 +641,38 @@ async def scan_cloud_directories(directories_request: DirectoriesScan) -> Dict[s
 
 @app.post("/cloud/ping")
 async def ping_cloud_provider(credentials: CloudCredentials) -> Dict[str, Any]:
-    """Ping cloud provider to check connectivity (placeholder)"""
+    """Ping cloud provider to check connectivity"""
     logger.info(f"Ping request for {credentials.provider} provider")
 
     try:
-        # Placeholder implementation - in a real implementation, you would:
-        # 1. Use the provider-specific SDK to test connectivity
-        # 2. Validate credentials
-        # 3. Check bucket/container access permissions
-
         if not credentials.username or not credentials.password:
             return {
                 "success": False,
                 "message": "Username and password/API key are required"
             }
 
-        # Simulate ping response
-        provider_urls = {
-            "google": "storage.googleapis.com",
-            "aws": "s3.amazonaws.com",
-            "azure": "blob.core.windows.net",
-            "dropbox": "api.dropboxapi.com"
-        }
+        if credentials.provider == "dropbox":
+            # For Dropbox, use the access token (password field) to test connection
+            success, message = test_dropbox_connection(credentials.password)
+            return {
+                "success": success,
+                "message": message
+            }
+        else:
+            # Placeholder implementation for other providers
+            provider_urls = {
+                "google": "storage.googleapis.com",
+                "aws": "s3.amazonaws.com",
+                "azure": "blob.core.windows.net"
+            }
 
-        url = provider_urls.get(credentials.provider, "unknown")
+            url = provider_urls.get(credentials.provider, "unknown")
 
-        # For now, just return success with a message
-        return {
-            "success": True,
-            "message": f"Ping to {credentials.provider} ({url}) successful (simulated)"
-        }
+            # For now, just return success with a message for non-Dropbox providers
+            return {
+                "success": True,
+                "message": f"Ping to {credentials.provider} ({url}) successful (simulated)"
+            }
 
     except Exception as e:
         logger.exception(f"Error pinging cloud provider: {str(e)}")
@@ -581,7 +695,7 @@ async def upload_to_cloud(cloud_settings: CloudSettings):
 
 
 async def upload_generator(cloud_settings: CloudSettings):
-    """Generator function for streaming upload progress (placeholder)"""
+    """Generator function for streaming upload progress"""
     try:
         # Validate settings
         if not cloud_settings.directories:
@@ -615,32 +729,115 @@ async def upload_generator(cloud_settings: CloudSettings):
 
         yield f"data: Found {total_files} files ({total_size} MB) to upload\n\n"
 
-        # Placeholder for actual upload implementation
-        # In a real implementation, you would:
-        # 1. Initialize the cloud provider SDK
-        # 2. Authenticate with the provided credentials
-        # 3. Iterate through all files in the directories
-        # 4. Upload each file with progress updates
-        # 5. Handle errors and retries
-
-        for i, directory in enumerate(cloud_settings.directories, 1):
-            dir_info = scan_result["directories"].get(directory, {})
-            dir_files = dir_info.get("files", 0)
-            dir_size = dir_info.get("size_mb", 0)
-
-            yield f"data: Processing directory {i}/{len(cloud_settings.directories)}: {directory}\n\n"
-            yield f"data: Directory contains {dir_files} files ({dir_size} MB)\n\n"
-
-            # Simulate upload progress
-            await asyncio.sleep(1)
-
-        yield f"data: Upload completed successfully!\n\n"
-        yield f"data: Total files uploaded: {total_files}\n\n"
-        yield f"data: Total size uploaded: {total_size} MB\n\n"
+        # Handle Dropbox uploads
+        if cloud_settings.provider == "dropbox":
+            async for message in handle_dropbox_upload(cloud_settings, scan_result):
+                yield message
+        else:
+            # Placeholder for other providers
+            async for message in handle_other_provider_upload(cloud_settings, scan_result):
+                yield message
 
     except Exception as e:
         logger.exception(f"Error during upload: {str(e)}")
         yield f"data: Error during upload: {str(e)}\n\n"
+
+
+async def handle_dropbox_upload(cloud_settings: CloudSettings, scan_result: Dict[str, Any]):
+    """Handle Dropbox-specific upload logic"""
+    if not DROPBOX_AVAILABLE:
+        yield f"data: Error: Dropbox library not available\n\n"
+        return
+
+    try:
+        # Initialize Dropbox client
+        yield f"data: Initializing Dropbox connection...\n\n"
+        dbx = dropbox.Dropbox(cloud_settings.password)  # password field contains access token
+
+        # Test connection
+        try:
+            account_info = dbx.users_get_current_account()
+            yield f"data: Connected to Dropbox account: {account_info.email}\n\n"
+        except AuthError:
+            yield f"data: Error: Invalid Dropbox access token\n\n"
+            return
+        except Exception as e:
+            yield f"data: Error connecting to Dropbox: {str(e)}\n\n"
+            return
+
+        # Upload files from each directory
+        uploaded_count = 0
+        failed_count = 0
+        total_files = scan_result["total_files"]
+
+        for directory in cloud_settings.directories:
+            dir_path = Path(directory)
+            dir_info = scan_result["directories"].get(directory, {})
+            dir_files = dir_info.get("files", 0)
+
+            if dir_files == 0:
+                yield f"data: Skipping empty directory: {directory}\n\n"
+                continue
+
+            yield f"data: Processing directory: {directory} ({dir_files} files)\n\n"
+
+            if not dir_path.exists() or not dir_path.is_dir():
+                yield f"data: Warning: Directory not found or not accessible: {directory}\n\n"
+                continue
+
+            # Process all files in the directory recursively
+            for file_path in dir_path.rglob('*'):
+                if file_path.is_file():
+                    # Create remote path (preserve directory structure)
+                    relative_path = file_path.relative_to(dir_path)
+                    remote_path = f"/{dir_path.name}/{relative_path}".replace("\\", "/")
+
+                    try:
+                        success, message = await upload_file_to_dropbox(dbx, file_path, remote_path)
+                        if success:
+                            uploaded_count += 1
+                            yield f"data: {message}\n\n"
+                        else:
+                            failed_count += 1
+                            yield f"data: {message}\n\n"
+                    except Exception as e:
+                        failed_count += 1
+                        yield f"data: ✗ Error uploading {file_path.name}: {str(e)}\n\n"
+
+                    # Brief pause to prevent overwhelming the API
+                    await asyncio.sleep(0.1)
+
+        # Final summary
+        yield f"data: Successfully uploaded: {uploaded_count} files\n\n"
+        if failed_count > 0:
+            yield f"data: Failed uploads: {failed_count} files\n\n"
+        yield f"data: Total processed: {uploaded_count + failed_count} of {total_files} files\n\n"
+
+    except Exception as e:
+        logger.exception(f"Error during Dropbox upload: {str(e)}")
+        yield f"data: Error during Dropbox upload: {str(e)}\n\n"
+
+
+async def handle_other_provider_upload(cloud_settings: CloudSettings, scan_result: Dict[str, Any]):
+    """Handle uploads for providers other than Dropbox (placeholder)"""
+    total_files = scan_result["total_files"]
+    total_size = scan_result["total_size"]
+
+    # Placeholder implementation for other providers
+    for i, directory in enumerate(cloud_settings.directories, 1):
+        dir_info = scan_result["directories"].get(directory, {})
+        dir_files = dir_info.get("files", 0)
+        dir_size = dir_info.get("size_mb", 0)
+
+        yield f"data: Processing directory {i}/{len(cloud_settings.directories)}: {directory}\n\n"
+        yield f"data: Directory contains {dir_files} files ({dir_size} MB)\n\n"
+
+        # Simulate upload progress
+        await asyncio.sleep(1)
+
+    yield f"data: Upload completed successfully! (simulated)\n\n"
+    yield f"data: Total files uploaded: {total_files}\n\n"
+    yield f"data: Total size uploaded: {total_size} MB\n\n"
 
 
 # Mount static files AFTER defining API routes

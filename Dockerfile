@@ -7,7 +7,7 @@ RUN apt-get update && \
 
 COPY app /app
 RUN python -m pip install /app --extra-index-url https://www.piwheels.org/simple && \
-    python -m pip install fastapi uvicorn requests
+    python -m pip install fastapi uvicorn requests dropbox
 
 EXPOSE 8000/tcp
 
