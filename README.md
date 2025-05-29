@@ -1,14 +1,43 @@
 # Cloud Upload
 
-BlueOS Extension to upload logs, images and videos to a cloud provider (e.g. Google Cloud)
+BlueOS Extension to upload logs, images and videos to a cloud provider (e.g. Google Cloud, AWS S3, Azure Blob Storage, Dropbox)
+
+## Supported Cloud Providers
+
+### Dropbox (Fully Implemented)
+- **Setup**: Create a Dropbox app at https://www.dropbox.com/developers/apps
+- **Authentication**: Use the generated access token as the password/API key
+- **Username**: Email address (optional, for display purposes only)
+
+### Other Providers (Placeholder Implementation)
+- Google Cloud Storage
+- Amazon S3
+- Azure Blob Storage
 
 ## Usage
 
-Users should select the Cloud provider they are using and the directories they would like to upload to the cloud
+1. Select your cloud provider from the dropdown
+2. Enter your credentials:
+   - **For Dropbox**: Enter your access token in the password field
+   - **For other providers**: Enter appropriate credentials (placeholder)
+3. Add the directories you want to upload
+4. Click "Ping Provider" to test your connection
+5. Click "Scan Directories" to see how many files will be uploaded
+6. Click "Upload All Files" to start the upload process
 
-Push the "Ping" button to confirm the cloud provided can be reached
+## Getting Dropbox Access Token
 
-Push the "Upload" button to upload all files
+1. Go to https://www.dropbox.com/developers/apps
+2. Click "Create app"
+3. Choose "Scoped access" and "Full Dropbox" access
+4. Give your app a name
+5. Go to the "Permissions" tab and enable:
+   - `files.metadata.write`
+   - `files.content.write`
+   - `files.content.read`
+6. Go to the "Settings" tab
+7. Under "OAuth 2", click "Generate access token"
+8. Copy the generated token and use it as the password in the Cloud Upload interface
 
 ## Developer Information
 
